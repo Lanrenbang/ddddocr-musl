@@ -197,6 +197,9 @@ jobs:
 
           sed -i "/^\\\[workspace\\\\]/a git_release_type = \"${RELEASE_TYPE}\"" release-plz-dynamic.toml
           
+          # 将 allow_dirty 设置为 true，避免因为存在动态生成的 config 文件而报错
+          sed -i 's/allow_dirty = false/allow_dirty = true/' release-plz-dynamic.toml
+          
           echo "📄 Dynamic Config Preview (Top 20 lines):"
           head -n 20 release-plz-dynamic.toml
 
