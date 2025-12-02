@@ -6,7 +6,7 @@ ARG ORT_VERSION="1.22.2"
 # ==============================================================================
 # Base Stage: Install common tools
 # ==============================================================================
-FROM rust:alpine AS base
+FROM --platform=$BUILDPLATFORM rust:alpine AS base
 WORKDIR /app
 # Install system dependencies required for downloading and extracting
 # Update CA certificates & Create nonroot user
@@ -20,7 +20,7 @@ RUN cargo install cargo-chef --locked
 # ==============================================================================
 # Planner Stage: Compute recipe
 # ==============================================================================
-FROM base AS planner
+FROM --platform=$BUILDPLATFORM base AS planner
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
@@ -28,7 +28,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 # Stage: Toolchain Downloader
 # Independent stage to cache toolchain download based on ARCH and VERSION
 # ==============================================================================
-FROM base AS toolchain-downloader
+FROM --platform=$BUILDPLATFORM base AS toolchain-downloader
 ARG TARGETARCH
 ARG BOOTLIN_TOOLCHAIN_VERSION
 WORKDIR /downloads
@@ -56,7 +56,7 @@ RUN mkdir -p /out/toolchains && \
 # Stage: OnnxRuntime Downloader
 # Independent stage to cache ORT download based on ARCH and VERSION
 # ==============================================================================
-FROM base AS ort-downloader
+FROM --platform=$BUILDPLATFORM base AS ort-downloader
 ARG TARGETARCH
 ARG ORT_VERSION
 ARG BACKEND=onnxruntime
@@ -88,7 +88,7 @@ RUN mkdir -p /out/onnxruntime && \
 # ==============================================================================
 # Builder Stage: Compile
 # ==============================================================================
-FROM base AS builder
+FROM --platform=$BUILDPLATFORM base AS builder
 ARG TARGETARCH
 ARG BACKEND=onnxruntime
 
