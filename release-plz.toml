@@ -36,8 +36,6 @@ body = """
 {% endif %}
 """
 
-# 使用与你参考文件中一致的分类逻辑
-# 稍微调整了顺序，让 Features 和 Fixes 排在前面
 commit_parsers = [
     { message = "^feat", group = "🚀 Features" },
     { message = "^fix", group = "🐛 Bug Fixes" },
@@ -55,5 +53,5 @@ commit_parsers = [
 protect_breaking_commits = true
 commit_preprocessors = [
     # 将 (#123) 转换为链接
-    { pattern = "\\(#([0-9]+)\\)", replace = "([#\${1}](https://github.com/${{ github.repository }}/pull/\${1}))" }
+    { pattern = "\\(#([0-9]+)\\)", replace = "([#${1}](https://github.com/me/my-proj/issues/${1}))"}
 ]
