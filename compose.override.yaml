@@ -1,0 +1,15 @@
+# 容器覆盖配置
+# - 仅在容器独立使用时会自动加载本配置
+
+services:
+  ddddocr:
+    network_mode: !reset null
+    depends_on: !reset null  # 如果使用 podman-compose，则需要 v1.5.0+
+
+    volumes: !override
+      - ./model:/app/model:ro  # 模型目录
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    ports:  # xray-api-bridge 独立运行时的端口
+      - "${DDDDOCR_LISTEN_ADDRESS}:${DDDDOCR_LISTEN_ADDRESS}"

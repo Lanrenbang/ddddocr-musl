@@ -1,0 +1,29 @@
+# Local development configuration
+# This file is ignored by Docker build (which overwrites it)
+
+[build]
+# Set default target to musl so `cargo build` implies it
+target = "x86_64-unknown-linux-musl"
+
+[target.x86_64-unknown-linux-musl]
+# Linker wrapper (relative to project root)
+linker = "toolchains/x86_64-linux-musl/bin/x86_64-linux-musl-gcc"
+
+[env]
+# Force ORT to use system binaries instead of downloading dynamic libs
+ORT_STRATEGY = "system"
+# Point to local static ORT libs (relative to project root)
+ORT_LIB_LOCATION = { value = "onnxruntime/onnxruntime-v1.22.2-x86_64-linux-musl-static/lib", relative = true }
+
+# Configure C compiler and Archiver for cc-rs (used by dependencies)
+CC_x86_64_unknown_linux_musl = { value = "toolchains/x86_64-linux-musl/bin/x86_64-linux-musl-gcc", relative = true }
+AR_x86_64_unknown_linux_musl = { value = "toolchains/x86_64-linux-musl/bin/x86_64-linux-musl-ar", relative = true }
+
+# --- ARM64 Configuration (Uncomment and adjust paths if developing on ARM64) ---
+# [target.aarch64-unknown-linux-musl]
+# linker = "toolchains/aarch64-linux-musl/bin/aarch64-linux-musl-gcc"
+#
+# [env]
+# CC_aarch64_unknown_linux_musl = { value = "toolchains/aarch64-linux-musl/bin/aarch64-linux-musl-gcc", relative = true }
+# AR_aarch64_unknown_linux_musl = { value = "toolchains/aarch64-linux-musl/bin/aarch64-linux-musl-ar", relative = true }
+# ORT_LIB_LOCATION = { value = "onnxruntime/onnxruntime-v1.22.2-aarch64-linux-musl-static/lib", relative = true }

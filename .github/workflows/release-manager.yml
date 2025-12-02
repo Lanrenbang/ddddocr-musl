@@ -1,0 +1,210 @@
+name: '🚀 Release Manager
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the release? (False = Create PR, True = Release Tag)'
+        type: boolean
+        required: true
+        default: false
+      prerelease-identifier:
+        description: 'Prerelease identifier (e.g., alpha, rc.1). Leave empty for normal release.'
+        required: false
+        default: ''
+
+  repository_dispatch:
+    types: [upstream-updated]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-manager:
+    name: Release Manager
+    runs-on: ubuntu-latest
+    # 重要：确保只有一个 release 任务在运行，避免冲突
+    concurrency:
+      group: release-plz-${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3  # v6.0.0
+        with:
+          fetch-depth: 0
+          # 使用 PAT 以便后续操作（如 push 代码或触发其他工作流）能正常工作
+          token: ${{ secrets.BOT_PAT }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Determine release parameters
+        id: params
+        shell: bash
+        run: |
+          PUBLISH=false
+          PRERELEASE=false
+          PRERELEASE_ID=""
+
+          echo "📋 Event: ${{ github.event_name }}"
+
+          case "${{ github.event_name }}" in
+            workflow_dispatch)
+              if [[ "${{ inputs.publish }}" == "true" ]]; then
+                PUBLISH=true
+                echo "   ✓ Mode: RELEASE (Tag & Publish)"
+              else
+                echo "   ✓ Mode: PREPARE (Create/Update PR)"
+              fi
+
+              if [[ -n "${{ inputs.prerelease-identifier }}" ]]; then
+                PRERELEASE=true
+                PRERELEASE_ID="${{ inputs.prerelease-identifier }}"
+                echo "   ✓ Prerelease Identifier: $PRERELEASE_ID"
+              fi
+              ;;
+
+            repository_dispatch)
+              # 只有 upstream-watcher 触发的事件才自动发布
+              TRIGGERED_BY="${{ github.event.client_payload.triggered_by }}"
+              echo "   Repository dispatch from: $TRIGGERED_BY"
+              if [[ "$TRIGGERED_BY" == "upstream-watcher" ]]; then
+                PUBLISH=true
+                echo "   ✓ Upstream update detected, auto-publishing."
+              fi
+              ;;
+
+            push)
+               echo "   Standard push, updating Release PR only"
+               ;; 
+          esac
+
+          # 确定最终执行的 release-plz 子命令
+          if [[ "$PUBLISH" == "true" ]]; then
+            COMMAND="release"
+          else
+            COMMAND="release-pr"
+          fi
+
+          # 确定 release type (prod / pre)
+          # 注意：即使 inputs.prerelease-identifier 为空，如果版本号本身带后缀，release-plz 也会识别为 pre
+          # 这里主要用于控制 git_release_type 字段
+          if [[ "$PRERELEASE" == "true" ]]; then
+            RELEASE_TYPE="pre"
+          else
+            RELEASE_TYPE="prod"
+          fi
+
+          {
+            echo "publish=$PUBLISH"
+            echo "prerelease=$PRERELEASE"
+            echo "prerelease_id=$PRERELEASE_ID"
+            echo "command=$COMMAND"
+            echo "release_type=$RELEASE_TYPE"
+          } >> "$GITHUB_OUTPUT"
+
+      # 安全检查：如果试图发布 (Release)，但存在未合并的 release-plz PR，则禁止发布
+      - name: Check for pending Release PRs
+        if: steps.params.outputs.command == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Checking for pending release-plz PRs..."
+          
+          PENDING_PRS=$(gh pr list \
+            --head "release-plz-" \
+            --state open \
+            --json number,title,url \
+            --jq '.')
+
+          PR_COUNT=$(echo "$PENDING_PRS" | jq 'length')
+
+          if [[ "$PR_COUNT" -gt 0 ]]; then
+            echo "❌ ERROR: Cannot publish while Release PRs are still open!"
+            echo "   Please review and merge the following PRs first:"
+            echo "$PENDING_PRS" | jq -r '.[] | "   - [#\(.number)] \(.title) (\(.url))"'
+            exit 1
+          else
+            echo "✅ No pending Release PRs found. Proceeding..."
+          fi
+
+      # Prerelease 逻辑：手动修改 Cargo.toml 版本号并提交
+      - name: Apply prerelease identifier
+        if: steps.params.outputs.prerelease == 'true'
+        run: |
+          PRERELEASE_ID="${{ steps.params.outputs.prerelease_id }}"
+
+          # 从 Cargo.toml 读取当前版本
+          # 假设格式: version = "0.1.0" 或 version = "0.1.0-alpha.1"
+          CURRENT_VERSION=$(grep -m1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\\1/')
+          
+          # 移除现有的 prerelease 后缀（如果存在），获取 Base Version
+          BASE_VERSION=$(echo "$CURRENT_VERSION" | sed 's/-.*//')
+
+          # 构建新版本号: Base + 新的 Identifier
+          NEW_VERSION="${BASE_VERSION}-${PRERELEASE_ID}"
+
+          if [[ "$CURRENT_VERSION" == "$NEW_VERSION" ]]; then
+             echo "ℹ️ Version is already $NEW_VERSION, skipping update."
+          else
+             echo "📦 Updating version: ${CURRENT_VERSION} → ${NEW_VERSION}"
+
+             # 更新 Cargo.toml
+             # 使用 sed 仅替换第一个匹配到的 version = ...
+             sed -i "0,/^version = .*/s//version = \"${NEW_VERSION}\"/" Cargo.toml
+
+             # 更新 Cargo.lock
+             cargo update --workspace
+
+             # 提交更改
+             git config user.name "github-actions[bot]"
+             git config user.email "github-actions[bot]@users.noreply.github.com"
+             git add Cargo.toml Cargo.lock
+             git commit -m "chore(release): set prerelease version to ${NEW_VERSION}"
+             
+             # 推送更改 (使用 Checkout 时配置的 PAT)
+             git push
+             
+             echo "✅ Prerelease version pushed."
+          fi
+
+      # 动态生成最终配置文件
+      - name: Generate dynamic config
+        run: |
+          RELEASE_TYPE="${{ steps.params.outputs.release_type }}"
+          
+          echo "🔧 Generating release-plz-dynamic.toml based on release-plz.toml..."
+          
+          # 复制基础配置
+          cp release-plz.toml release-plz-dynamic.toml
+          
+          # 追加动态配置
+          # 这里我们追加到 [workspace] 部分下面。
+          # 由于 TOML 的结构，直接追加到文件末尾可能会破坏 [changelog] 等 section 的归属。
+          # 最安全的方法是使用 sed 在 [workspace] 之后插入，或者如果文件开头就是 workspace，直接插入头部。
+          # release-plz.toml 开头就是 [workspace]，所以我们追加在第一行后面即可，或者直接用 sed 替换占位符（如果用模板的话）。
+          # 简单起见，我们直接追加到文件头部（TOML 允许重复 key 吗？通常不允许，但不同 section 可以）。
+          # 更好的方式：release-plz.toml 里不写这几个动态 key，我们这里追加。
+          # 由于 release-plz.toml 是我们自己控制的，我们确保 [workspace] 在最前面。
+          # 我们可以用 sed 在 [workspace] 这一行下面插入动态配置。
+
+          sed -i "/^\\\[workspace\\\\]/a git_release_type = \"${RELEASE_TYPE}\"" release-plz-dynamic.toml
+          
+          echo "📄 Dynamic Config Preview (Top 20 lines):"
+          head -n 20 release-plz-dynamic.toml
+
+      - name: Run release-plz
+        uses: release-plz/action@v0.5  # 7301a1468f3100413e5c49cf300358beaada1bf3  # v0.3.149
+        with:
+          command: ${{ steps.params.outputs.command }}
+          config: release-plz-dynamic.toml
+        env:
+          # 必须使用 PAT 才能触发后续的 CI 工作流
+          GITHUB_TOKEN: ${{ steps.params.outputs.publish == 'true' && secrets.BOT_PAT || secrets.GITHUB_TOKEN }}
+

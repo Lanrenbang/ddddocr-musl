@@ -1,0 +1,24 @@
+# 容器主配置
+# - 当容器被前置 caddy 引用时直接加载本配置
+# - 当容器独立使用时，volumes、network_mode、depends_on 将被 compose.override.yaml 自动覆盖
+
+services:
+  ddddocr: 
+    # image: lanrenbang/ddddocr-musl:latest
+    image: localhost/ddddocr-musl:latest
+    container_name: ddddocr
+    restart: unless-stopped
+    environment:  # 时区设置
+      - TZ=America/Los_Angeles
+
+    volumes:
+      - shared_socket_path:/dev/shm  # 共享内存盘，套接字由子服务创建，caddy 反代
+      - ${DDDDOCR_PROJECT_DIR:-.}/model:/app/model:ro  # 模型目录
+    # DDDDOCR_LISTEN_ADDRESS 自动从当前目录 .env（独立运行）或者前置服务 .env 提供 , "--disable-slide"
+
+    command: ["--address", "${DDDDOCR_LISTEN_ADDRESS}"]
+
+    network_mode: "service:caddy"  # 共享 caddy 网络栈
+    depends_on:
+      - caddy
+

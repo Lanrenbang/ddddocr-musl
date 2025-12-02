@@ -1,0 +1,16 @@
+target/
+**/*.rs.bk
+Dockerfile
+.dockerignore
+.env*
+compose*
+*.sh
+.git
+.gitignore
+model/
+image/
+*.log
+references/
+onnxruntime/
+toolchains/
+.cargo/

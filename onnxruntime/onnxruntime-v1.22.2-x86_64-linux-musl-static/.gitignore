@@ -1,0 +1,6 @@
+# onnxruntime musl 运行时默认路径，仅用于本地构建
+# 具体查看 @.cargo/config.toml
+# 推荐下载地址 https://github.com/RapidAI/OnnxruntimeBuilder/releases
+
+*
+!.gitignore

@@ -1,0 +1,6 @@
+# ddddocr-musl onnx 模型默认路径，需手动下载
+# 推荐下载地址 https://github.com/86maid/ddddocr/tree/master/model
+# 推荐使用 ../update_models.sh 脚本下载，将自动检测更新
+
+*
+!.gitignore
