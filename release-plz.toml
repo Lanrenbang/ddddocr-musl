@@ -55,5 +55,5 @@ commit_parsers = [
 protect_breaking_commits = true
 commit_preprocessors = [
     # 将 (#123) 转换为链接
-    { pattern = "\\(#([0-9]+))", replace = "([#${1}](https://github.com/{{ remote.owner }}/{{ remote.repo }}/pull/${1}))" },
+    { pattern = "\\(#([0-9]+)\\)", replace = "([#\${1}](https://github.com/${{ github.repository }}/pull/\${1}))" }
 ]
