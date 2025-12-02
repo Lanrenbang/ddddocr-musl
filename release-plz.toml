@@ -51,8 +51,8 @@ commit_parsers = [
     { message = ".*", group = "Other" },
 ]
 
-# 忽略不需要出现在 changelog 中的提交
-filter_commits = true
+# 不会跳过任何包含破坏性更改的提交
+protect_breaking_commits = true
 commit_preprocessors = [
     # 将 (#123) 转换为链接
     { pattern = "\\(#([0-9]+))", replace = "([#${1}](https://github.com/{{ remote.owner }}/{{ remote.repo }}/pull/${1}))" },
