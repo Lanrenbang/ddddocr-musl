@@ -2,7 +2,7 @@
 name = "ddddocr-musl"
 version = "0.1.1"
 edition = "2021"
-publish = false
+# publish = false
 
 [dependencies]
 # Inference Engine
