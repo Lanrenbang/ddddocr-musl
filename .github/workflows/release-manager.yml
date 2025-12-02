@@ -211,4 +211,5 @@ jobs:
         env:
           # 必须使用 PAT 才能触发后续的 CI 工作流
           GITHUB_TOKEN: ${{ steps.params.outputs.publish == 'true' && secrets.BOT_PAT || secrets.GITHUB_TOKEN }}
+          RUST_LOG: debug
 
