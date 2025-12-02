@@ -112,6 +112,8 @@ RUN set -e; \
         LINKER_BIN="aarch64-linux-musl-gcc"; \
     fi; \
     \
+    rustup target add "$RUST_TARGET"; \
+    \
     LINKER_PATH="/app/toolchains/$TOOLCHAIN_DIR/bin/$LINKER_BIN"; \
     if [ ! -f "$LINKER_PATH" ]; then echo "Linker not found at $LINKER_PATH"; exit 1; fi; \
     \
