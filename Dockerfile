@@ -134,9 +134,9 @@ RUN set -e; \
 
 # 3. Cook dependencies (The heavy caching layer)
 COPY --from=planner /app/recipe.json recipe.json
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/app/target \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
     set -e; \
     RUST_TARGET=$(cat /app/rust_target); \
     . /app/ort_env; \
@@ -151,9 +151,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 # 4. Build Application (Source code changes affect only from here)
 COPY . .
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/app/target \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
     set -e; \
     RUST_TARGET=$(cat /app/rust_target); \
     . /app/ort_env; \
