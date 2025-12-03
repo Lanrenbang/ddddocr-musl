@@ -1,0 +1,57 @@
+[workspace]
+# 基础配置
+allow_dirty = true
+changelog_update = true
+dependencies_update = true
+git_release_enable = true
+git_tag_enable = true
+# 不发布到 crates.io
+publish = false
+
+# PR 配置 (虽然主要由 release-pr 命令控制，但这里设置默认值)
+pr_draft = false
+pr_labels = ["release"]
+pr_branch_prefix = "release-plz-"
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project will be documented in this file.
+"""
+
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}
+## {{ group | upper_first }}
+{% for commit in commits %}
+- {{ commit.message | split(pat="\n") | first | trim }} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/{{ remote.owner }}/{{ remote.repo }}/commit/{{ commit.id }}))
+{%- endfor %}
+{% endfor %}
+
+{% if remote.contributors %}
+### Contributors
+{% for contributor in remote.contributors %}
+* @{{ contributor.username }}
+{% endfor %}
+{% endif %}
+"""
+
+commit_parsers = [
+    { message = "^feat", group = "🚀 Features" },
+    { message = "^fix", group = "🐛 Bug Fixes" },
+    { message = "^perf", group = "⚡ Performance" },
+    { message = "^refactor", group = "♻️ Refactor" },
+    { message = "^doc", group = "📚 Documentation" },
+    { message = "^test", group = "✅ Tests" },
+    { message = "^ci", group = "👷 CI" },
+    { message = "^chore", group = "🔧 Chore" },
+    { message = "^build", group = "📦 Build" },
+    { message = ".*", group = "Other" },
+]
+
+# 不会跳过任何包含破坏性更改的提交
+protect_breaking_commits = true
+commit_preprocessors = [
+    # 将 (#123) 转换为链接
+    { pattern = "\\(#([0-9]+)\\)", replace = "([#${1}](https://github.com/me/my-proj/issues/${1}))"}
+]
