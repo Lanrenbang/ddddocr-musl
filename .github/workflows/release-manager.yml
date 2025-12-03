@@ -35,16 +35,6 @@ jobs:
       cancel-in-progress: false
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3  # v6.0.0
-        with:
-          fetch-depth: 0
-          # 使用 PAT 以便后续操作（如 push 代码或触发其他工作流）能正常工作
-          token: ${{ secrets.BOT_PAT }}
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
       - name: Determine release parameters
         id: params
         shell: bash
@@ -52,6 +42,7 @@ jobs:
           PUBLISH=false
           PRERELEASE=false
           PRERELEASE_ID=""
+          SKIP="true" # 默认为 true (跳过)
 
           echo "📋 Event: ${{ github.event_name }}"
 
@@ -69,6 +60,7 @@ jobs:
                 PRERELEASE_ID="${{ inputs.prerelease-identifier }}"
                 echo "   ✓ Prerelease Identifier: $PRERELEASE_ID"
               fi
+              SKIP="false" # 手动触发不跳过
               ;;
 
             repository_dispatch)
@@ -78,12 +70,25 @@ jobs:
               if [[ "$TRIGGERED_BY" == "upstream-watcher" ]]; then
                 PUBLISH=true
                 echo "   ✓ Upstream update detected, auto-publishing."
+                SKIP="false" # 上游触发不跳过
               fi
               ;;
 
             push)
-               echo "   Standard push, updating Release PR only"
-               ;; 
+              # 1. 获取最后一次提交的标题
+              COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -n 1)
+              echo "   Last Commit: $COMMIT_MSG"
+              # 2. 是否 `release-plz 的发布 PR`
+              if [[ "$COMMIT_MSG" == *"chore: release"* ]] || [[ "$COMMIT_MSG" == *"release v"* ]]; then
+                # 发布 PR 被合并，这里设置为 skip，什么都不做
+                echo "   🛑 Release Merge detected. Doing NOTHING as per user request."
+                SKIP="true"
+              else
+                # 普通代码提交，每次提交都执行 release-pr，保持 PR 更新
+                echo "   Standard push, updating Release PR only"
+                SKIP="false" # 普通提交不跳过
+              fi
+              ;;
           esac
 
           # 确定最终执行的 release-plz 子命令
@@ -108,11 +113,24 @@ jobs:
             echo "prerelease_id=$PRERELEASE_ID"
             echo "command=$COMMAND"
             echo "release_type=$RELEASE_TYPE"
+            echo "skip=$SKIP"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        if: steps.params.outputs.skip == 'false'
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3  # v6.0.0
+        with:
+          fetch-depth: 0
+          # 使用 PAT 以便后续操作（如 push 代码或触发其他工作流）能正常工作
+          token: ${{ secrets.BOT_PAT }}
+
+      - name: Install Rust toolchain
+        if: steps.params.outputs.skip == 'false'
+        uses: dtolnay/rust-toolchain@stable
 
       # 安全检查：如果试图发布 (Release)，但存在未合并的 release-plz PR，则禁止发布
       - name: Check for pending Release PRs
-        if: steps.params.outputs.command == 'release'
+        if: steps.params.outputs.skip == 'false' && steps.params.outputs.command == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -137,7 +155,7 @@ jobs:
 
       # Prerelease 逻辑：手动修改 Cargo.toml 版本号并提交
       - name: Apply prerelease identifier
-        if: steps.params.outputs.prerelease == 'true'
+        if: steps.params.outputs.skip == 'false' && steps.params.outputs.prerelease == 'true'
         run: |
           PRERELEASE_ID="${{ steps.params.outputs.prerelease_id }}"
 
@@ -177,6 +195,7 @@ jobs:
 
       # 动态生成最终配置文件
       - name: Generate dynamic config
+        if: steps.params.outputs.skip == 'false'
         run: |
           RELEASE_TYPE="${{ steps.params.outputs.release_type }}"
           
@@ -204,6 +223,7 @@ jobs:
           head -n 20 release-plz-dynamic.toml
 
       - name: Run release-plz
+        if: steps.params.outputs.skip == 'false'
         uses: release-plz/action@v0.5  # 7301a1468f3100413e5c49cf300358beaada1bf3  # v0.3.149
         with:
           command: ${{ steps.params.outputs.command }}
