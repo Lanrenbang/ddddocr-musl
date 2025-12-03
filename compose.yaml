@@ -4,8 +4,7 @@
 
 services:
   ddddocr: 
-    # image: lanrenbang/ddddocr-musl:latest
-    image: localhost/ddddocr-musl:latest
+    image: lanrenbang/ddddocr-musl:latest
     container_name: ddddocr
     restart: unless-stopped
     environment:  # 时区设置
